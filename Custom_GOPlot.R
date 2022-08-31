@@ -1,3 +1,9 @@
+
+# library(GOplot)
+# trace(GOChord, edit=TRUE)
+
+# On the popping up screen delete the existing code and paste the code below instead and save:
+
 function (data, title, space, gene.order, gene.size, gene.space, 
           nlfc = 1, lfc.col, lfc.min, lfc.max, ribbon.col, border.size, 
           process.label, limit) 
@@ -208,3 +214,7 @@ function (data, title, space, gene.order, gene.size, gene.space,
             legend.box = "horizontal", legend.direction = "horizontal")
   }
 }
+                    
+                    
+                    
+                   
