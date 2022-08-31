@@ -1,118 +1,156 @@
 
+library(ggdendro)
+library(GOplot)
+library(tidyverse)
 
+# Read the gene annotation file 
+gtf.Dr <- "Desktop/Submission_MM/Genome-GTF-files/Danio_rerio.GRCz11.93.gtf"
+ann.Dr <- elementMetadata(import(gtf.Dr))
 
-PI3K <- as.data.frame(read.csv(file = "/Users/yeliz/Desktop/Circular/hsa04150.PI3K-Akt.signaling.pathway.Hs.txt", 
-                                     stringsAsFactors = FALSE, header=FALSE, sep = "\t")) %>% 
-  pull(V2) %>% 
+# Read the fold changes of time points from DESeq results
+load("~/Desktop/Submission_MM/RData/RES_1dpa.RData")
+load("~/Desktop/Submission_MM/RData/RES_7dpa.RData")
+load("~/Desktop/Submission_MM/RData/RES_nevi.RData")
+load("~/Desktop/Submission_MM/RData/RES_melanoma.RData")
+
+res_1dpa <- res_1dpa[,c(2,7)] %>% as.data.frame() %>% rownames_to_column('IDs')
+colnames(res_1dpa) <- c('IDs','log2FC-1dpa', 'gene_name')
+
+res_7dpa <- res_7dpa[,c(2,7)] %>% as.data.frame() %>% rownames_to_column('IDs')
+colnames(res_7dpa) <- c('IDs','log2FC-7dpa', 'gene_name')
+
+res_nevi <- res_nevi[,c(2,7)] %>% as.data.frame() %>% rownames_to_column('IDs')
+colnames(res_nevi) <- c('IDs','log2FC-nevi', 'gene_name')
+
+res_melanoma <- res_melanoma[,c(2,7)] %>% as.data.frame() %>% rownames_to_column('IDs')
+colnames(res_melanoma) <- c('IDs','log2FC-melanoma', 'gene_name')
+
+# Generate a fold change table (all)
+all <- full_join(res_1dpa, res_7dpa, by='IDs' ) %>% full_join(res_nevi, by='IDs') %>% full_join(res_melanoma, by='IDs')
+all <- all[,c(1,2,4,6,8,9)]
+
+# Read the genes in pathways
+NC <- read.csv('~/Desktop/Submission_MM/AmiGO-GOs-for-comparisons/3-GO-0001755-neural crest cell migration.txt', 
+               stringsAsFactors = FALSE, header=FALSE, sep = "\t") %>% 
+  pull(V1) %>% 
   str_extract("[^;]*") %>% 
   unique() %>% 
   as.data.frame() %>% 
-  dplyr::rename(HumanName='.') %>% 
-  mutate(Akt=1)
+  dplyr::rename(gene_name='.') %>% 
+  mutate(NC=1)
 
-
-
-
-
-
-mTOR <- as.data.frame(read.csv(file = "/Users/yeliz/Desktop/Circular/hsa04150.mTOR.signaling.pathway.Hs.txt", 
-                               stringsAsFactors = FALSE, header=FALSE, sep = "\t")) %>% 
-  pull(V2) %>% 
+GSD <- read.csv('~/Desktop/Submission_MM/AmiGO-GOs-for-comparisons/10-GO-0010001-glial cell differentiation.txt', 
+                stringsAsFactors = FALSE, header=FALSE, sep = "\t") %>% 
+  pull(V1) %>% 
   str_extract("[^;]*") %>% 
   unique() %>% 
   as.data.frame() %>% 
-  dplyr::rename(HumanName='.') %>% 
-  mutate(mTOR=1)
+  dplyr::rename(gene_name='.') %>% 
+  mutate(GSD=1)
 
-
-RAS <- as.data.frame(read.csv(file = "/Users/yeliz/Desktop/Circular/hsa04014.Ras.signaling.pathway.Hs.txt", 
-                               stringsAsFactors = FALSE, header=FALSE, sep = "\t")) %>% 
-  pull(V2) %>% 
+FR <- read.csv('~/Desktop/Submission_MM/AmiGO-GOs-for-comparisons/13-GO-0031101-fin regeneration.txt', 
+               stringsAsFactors = FALSE, header=FALSE, sep = "\t") %>% 
+  pull(V1) %>% 
   str_extract("[^;]*") %>% 
   unique() %>% 
   as.data.frame() %>% 
-  dplyr::rename(HumanName='.') %>% 
-  mutate(RAS=1)
+  dplyr::rename(gene_name='.') %>% 
+  mutate(FR=1)
 
-
-MAPK <- as.data.frame(read.csv(file = "/Users/yeliz/Desktop/Circular/hsa04010.MAPK.signaling.pathway.Hs.txt", 
-                               stringsAsFactors = FALSE, header=FALSE, sep = "\t")) %>% 
-  pull(V2) %>% 
+FM <- read.csv('~/Desktop/Submission_MM/AmiGO-GOs-for-comparisons/14-GO-0033334-fin-morphogenesis.txt', 
+               stringsAsFactors = FALSE, header=FALSE, sep = "\t") %>% 
+  pull(V1) %>% 
   str_extract("[^;]*") %>% 
   unique() %>% 
   as.data.frame() %>% 
-  dplyr::rename(HumanName='.') %>% 
-  mutate(MAPK=1)
+  dplyr::rename(gene_name='.') %>% 
+  mutate(FM=1)
 
 
-Glioma$HumanName %>% union(Cancer$HumanName) %>% 
-  union(Apoptosis$HumanName) %>% 
-  union(cycle$HumanName) %>% 
-  union(PI3K$HumanName) %>% 
-  union(VEGF$HumanName) %>% 
-  union(mTOR$HumanName) %>% 
-  union(RAS$HumanName) %>% 
-  union(MAPK$HumanName) -> union.pathways
+NC$gene_name %>% union(GSD$gene_name) %>% 
+  union(FR$gene_name) %>% 
+  union(FM$gene_name) -> union.pathways
 
 
-hm1 %>% filter (HumanName %in% union.pathways) -> x
+# Take the union genes in all lists and remove duplicated ones
+union.pathways <- union.pathways[! union.pathways %in% c('adgrg1', 'cdh23', 'cdh30', 'celsr2', 'col6a3', 'dlg4b', 'evx1', 
+                                                         'hmcn2', 'itgb1b.1', 'pcdh11', 'pcdh1gb2', 'pcdh20', 'pcdh2ab2', 
+                                                         'plxnb2a', 'ptprsa', 'robo2', 'selp', 'si:ch211-182p11.1', 'si:ch211-215c18.3', 
+                                                         'si:dkey-238d)18.7', 'si:dkey-238d18.7')]
+
+union.pathways <- union.pathways %>% setdiff(str_subset(., "^[(si:)|(zmp:)]"))
 
 
-x %>% left_join(Glioma, by="HumanName") %>% 
-  left_join(Cancer, by="HumanName") %>%
-  left_join(Apoptosis, by="HumanName") %>% 
-  left_join(cycle, by="HumanName") %>% 
-  left_join(PI3K, by="HumanName") %>% 
-  left_join(VEGF, by="HumanName") %>% 
-  left_join(mTOR, by="HumanName") %>% 
-  left_join(RAS, by="HumanName") %>% 
-  left_join(MAPK, by="HumanName") -> binary
+# Subset pathway genes from fold change
+all %>% filter (gene_name.y.y %in% union.pathways) -> x
 
 
+# Change the column names in the table
+colnames(x) <- c("ID","log2FC-1dpa", "log2FC-7dpa", "log2FC-nevi", "log2FC-melanoma", "gene_name")
 
 
+# Generate binary table for Chord plot
+x %>% left_join(NC, by="gene_name") %>%  
+  left_join(GSD, by="gene_name") %>%
+  left_join(FR, by="gene_name") %>% 
+  left_join(FM, by="gene_name") -> binary
 
-
-
-  
 binary[is.na(binary)] <- 0
 
-lfcmax <- max(binary$Log2FC)
-lfcmin <- min(binary$Log2FC)
+rownames(binary) <- binary$gene_name
 
+binary <- binary[ -c(1,6) ]
 
 binary1 <- binary
+binary1 <- binary1[c(5,6,7,8,1,2,3,4)]
 
-binary1 <- binary1[c(1,3,4,5,6,7,8,9,10,2)]
+binary2 <- binary1
+binary2 %>% filter(NC+GSD+FR+FM!=0) -> binary3 # remove zeros
 
-
-binary1 %>% filter(!(duplicated(HumanName)| duplicated(HumanName, fromLast=TRUE))) -> binary2
-
-rownames(binary2) <- binary2$HumanName
-
-binary2 <- binary2[,-1]
-
-binary3 <- binary2
-
-
-binary3 %>% filter(Glioma+Cancer+Apoptosis+cycle+Akt+VEGF+mTOR+RAS!=0) -> binary3
-
+# Set max and min for fold changes
 lfcmax <- max(binary3)
 lfcmin <- min(binary3)
 
 
+# Set s colour palette
 paletteLength <- 50
 
-myColor <- c(colorRampPalette(c("paleturquoise4","slategray2"))(floor((paletteLength-1)/2)), 
-             colorRampPalette("cornsilk")(1), 
-             colorRampPalette(c("moccasin","darkorange3"))(floor((paletteLength-1)/2)))
-MyBreaks <- c(seq(lfcmin, -.58, length.out = floor(paletteLength/2)), 
-              seq(.58, lfcmax, length.out = ceiling(paletteLength/2)))
+myColor <- c(colorRampPalette(c("darkblue","skyblue"))(floor((paletteLength-1)/2)), colorRampPalette("cornsilk")(1), colorRampPalette(c("lightpink","darkred"))(floor((paletteLength-1)/2)))
+MyBreaks <- c(seq(min(lfcmin), -log2(1.2), length.out = floor(paletteLength/2)), seq(log2(1.2), max(lfcmax), length.out = ceiling(paletteLength/2)))
 
-GOChord(binary3 %>% dplyr::rename(logFC=Log2FC), space = 0.010, gene.order = c('Log2FC') ,gene.space = 0.25, gene.size = 1, process.label=3, border.size = 0.001, 
-        ribbon.col = c("#e46b69","#4984da","#66cec9","#c5d15b","#fed963","#f88a58","black","yellow"), lfc.max=lfcmax, lfc.min =lfcmin,
+# Order and cluster binary file based on fold change
+binary3 %>% dplyr::select(starts_with("log")) %>% 
+  as.matrix() %>% 
+  {rownames(.)[hclust(dist(.))$order]} -> order
+
+binary3 <- binary3[order,]
+
+
+# Change the column names of the binary file
+colnames(binary3) <- c("Neural crest cell migration", 
+                       "Glial cell differentiation",
+                       "Fin regeneration", 
+                       "Fin-morphogenesis",  
+                       "log2FC-1dpa",   
+                       "log2FC-7dpa",   
+                       "log2FC-nevi", 
+                       "log2FC-melanoma")
+
+
+# Plot the data
+GOChord(binary3 %>% dplyr::rename(logFC=`log2FC-1dpa`),
+        space = 0.000000001, 
+        gene.order = 'none',
+        gene.space = 0.3, 
+        gene.size = 2, 
+        nlfc=4,
+        process.label=10, 
+        limit = c(0,0),
+        border.size = 0.0000000001, 
+        ribbon.col = c((alpha('#d9c989',0.9)), (alpha('#c8acc1',0.9)), (alpha("#5493a6",0.6)), (alpha("#6f5554",0.7))),     
+        lfc.max=lfcmax, lfc.min =lfcmin,
         lfc.col=c("red","white","blue")) + 
-  scale_fill_gradientn(limits=c(lfcmin,lfcmax),colours=myColor, values=MyBreaks %>% scales::rescale(from=c(lfcmin,lfcmax)))
+  scale_fill_gradientn (limits=c(lfcmin,lfcmax),colours=myColor, values=MyBreaks %>% scales::rescale(from=c(lfcmin,lfcmax))) 
 
 
 
@@ -128,60 +166,5 @@ GOChord(binary3 %>% dplyr::rename(logFC=Log2FC), space = 0.010, gene.order = c('
 
 
 
-
-
-
-
-
-
-
-binary_file <- read.csv("/Users/yeliz/Desktop/circular_plot/binary_file.csv")
-X1_path <- read.csv("/Users/yeliz/Desktop/circular_plot/X1_Path.CSV")
-X1_path <- X1_path[,1:2]
-colnames(X1_path) <- c("query.term", "logFC") 
-
-X1_binary <- merge(binary_file, X1_path, by="query.term")
-X1_binary <- distinct(X1_binary)
-
-rownames(X1_binary) <- X1_binary$query.term
-chord_X1 <- X1_binary[,2:8]      
-
-
-
-binary_file <- read.csv("/Users/yeliz/Desktop/circular_plot/binary_file.csv")
-X3_path <- read.csv("/Users/yeliz/Desktop/circular_plot/X3_Path.CSV")
-X3_path <- X3_path[,1:2]
-colnames(X3_path) <- c("query.term", "logFC") 
-
-X3_binary <- merge(binary_file, X3_path, by="query.term")
-X3_binary <- distinct(X3_binary)
-
-rownames(X3_binary) <- X3_binary$query.term
-chord_X3 <- X3_binary[,2:8]  
-
-
-lfcmax <- max(chord_X1$logFC,chord_X3$logFC)
-lfcmin <- min(chord_X1$logFC,chord_X3$logFC)
-
-paletteLength <- 50
-
-myColor <- c(colorRampPalette(c("paleturquoise4","slategray2"))(floor((paletteLength-1)/2)), colorRampPalette("cornsilk")(1), colorRampPalette(c("moccasin","darkorange3"))(floor((paletteLength-1)/2)))
-MyBreaks <- c(seq(lfcmin, -.58, length.out = floor(paletteLength/2)), seq(.58, lfcmax, length.out = ceiling(paletteLength/2)))
-
-
-
-GOChord(chord_X1, space = 0.010, gene.order = c('logFC') ,gene.space = 0.25, gene.size = 2, process.label=7, border.size = 0.001, 
-        ribbon.col = c("#e46b69","#4984da","#66cec9","#c5d15b","#fed963","#f88a58"), lfc.max=8.6, lfc.min = -2.9,
-        lfc.col=c("red","white","blue")) + 
-  scale_fill_gradientn(limits=c(lfcmin,lfcmax),colours=myColor, values=MyBreaks %>% scales::rescale(from=c(lfcmin,lfcmax)))
-
-GOChord(chord_X3, space = 0.015, gene.order = 'logFC',gene.space = 0.25, gene.size = 6.5, process.label=7, border.size = 0.001, 
-        ribbon.col =c("#e46b69","#4984da","#66cec9","#c5d15b","#fed963","#f88a58"), lfc.max=8.6, lfc.min = -2.9,
-        lfc.col=c('red','white','blue')) + 
-  scale_fill_gradientn(limits=c(lfcmin,lfcmax),colours=myColor, values=MyBreaks %>% scales::rescale(from=c(lfcmin,lfcmax)))
-
-
-
-c("#E57373","#FFCC80","paleturquoise3","#9FA8DA","#81C784","lightpink")
 
 
